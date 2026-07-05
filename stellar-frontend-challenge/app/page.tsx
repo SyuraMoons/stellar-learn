@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import { CONTRACT_ID, CONTRACT_EXPLORER_URL } from '@/lib/config';
 
 // Stellar Wallets Kit touches `window` when lib/stellar-helper.ts loads, so
 // everything that imports it must render client-side only.
@@ -26,6 +27,12 @@ const TransactionHistory = dynamic(
   () => import('@/components/TransactionHistory'),
   { ssr: false }
 );
+const EscrowPanel = dynamic(() => import('@/components/EscrowPanel'), {
+  ssr: false,
+});
+const ContractEvents = dynamic(() => import('@/components/ContractEvents'), {
+  ssr: false,
+});
 
 const GUIDE_STEPS = [
   {
@@ -136,6 +143,14 @@ export default function Home() {
                 <TransactionHistory publicKey={publicKey} />
               </div>
             </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <EscrowPanel
+                publicKey={publicKey}
+                onSuccess={handlePaymentSuccess}
+              />
+              <ContractEvents />
+            </div>
           </div>
         )}
       </main>
@@ -152,6 +167,16 @@ export default function Home() {
               className="underline underline-offset-2 transition-colors hover:text-neutral-900"
             >
               explorer
+            </a>{' '}
+            ·{' '}
+            <a
+              href={CONTRACT_EXPLORER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 transition-colors hover:text-neutral-900"
+              title={CONTRACT_ID}
+            >
+              escrow contract
             </a>
           </p>
         </div>
