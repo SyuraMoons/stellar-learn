@@ -319,6 +319,22 @@ export async function createEscrow(params: {
   const claimHash = await sha256(secret);
   const expiry = Math.floor(Date.now() / 1000) + DEFAULT_EXPIRY_SECONDS;
 
+  // Safety net: if the tab closes or confirmation times out after the tx
+  // lands on-chain, the code would otherwise be lost (funds stuck until the
+  // expiry refund). Recover it via localStorage key `kirim.lastEscrowSecret`.
+  try {
+    localStorage.setItem(
+      'kirim.lastEscrowSecret',
+      JSON.stringify({
+        secretHex: toHex(secret),
+        amountXlm: params.amountXlm,
+        createdAt: new Date().toISOString(),
+      })
+    );
+  } catch {
+    // private mode / storage full — non-fatal
+  }
+
   const txHash = await invoke(
     params.sender,
     'create_payment',
