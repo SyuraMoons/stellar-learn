@@ -185,6 +185,31 @@ function mapError(error: any, phase: 'sign' | 'rpc'): ContractCallError {
   );
 }
 
+/**
+ * Poll a transaction's status via raw JSON-RPC instead of the SDK's
+ * getTransaction: the SDK (v12, pinned by the template) can't parse the
+ * TransactionMeta v4 XDR returned by newer Stellar protocols and throws
+ * "Bad union switch: 4" even for successful transactions. We only need the
+ * status string, so skip XDR parsing entirely.
+ */
+async function getTransactionStatus(
+  hash: string
+): Promise<'SUCCESS' | 'FAILED' | 'NOT_FOUND'> {
+  const res = await fetch(SOROBAN_RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getTransaction',
+      params: { hash },
+    }),
+  });
+  if (!res.ok) throw new Error(`RPC ${res.status}`);
+  const json = await res.json();
+  return json?.result?.status ?? 'NOT_FOUND';
+}
+
 // ── core invoke pipeline ─────────────────────────────────────────────────
 
 async function invoke(
@@ -254,17 +279,18 @@ async function invoke(
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 1500));
-    let res;
+    let status: 'SUCCESS' | 'FAILED' | 'NOT_FOUND';
     try {
-      res = await server.getTransaction(hash);
-    } catch (error) {
-      throw mapError(error, 'rpc');
+      status = await getTransactionStatus(hash);
+    } catch {
+      // transient poll failure — keep retrying until the deadline
+      continue;
     }
-    if (res.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
+    if (status === 'SUCCESS') {
       onStatus('success');
       return hash;
     }
-    if (res.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
+    if (status === 'FAILED') {
       onStatus('failed');
       throw new ContractCallError(
         'contract',
@@ -276,7 +302,7 @@ async function invoke(
   onStatus('failed');
   throw new ContractCallError(
     'network',
-    'Timed out waiting for confirmation — check the explorer before retrying.'
+    'Timed out waiting for confirmation — the transaction may still succeed; check the explorer before retrying.'
   );
 }
 

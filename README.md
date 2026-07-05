@@ -16,11 +16,10 @@ The design is intentionally minimal: dominant white, hairline borders, near-blac
 
 | | |
 |---|---|
-| **Contract address** | [`CD3HCXPVO5AQXEIYI3LH47Q7MTPUTFSWLHPSVPRZV6E2NFCUXDFMBR27`](https://stellar.expert/explorer/testnet/contract/CD3HCXPVO5AQXEIYI3LH47Q7MTPUTFSWLHPSVPRZV6E2NFCUXDFMBR27) |
+| **Contract address** | [`CAPLG3MZG6LSH2VMGZHIQV7T5DP7RBJNQH44OLAUPIK3FDQHK5K5PW2Y`](https://stellar.expert/explorer/testnet/contract/CAPLG3MZG6LSH2VMGZHIQV7T5DP7RBJNQH44OLAUPIK3FDQHK5K5PW2Y) |
 | **Contract** | `kirim-escrow` — hashlock escrow (Rust / Soroban), source in [`soroban-hello-world/contracts/kirim-escrow/`](soroban-hello-world/contracts/kirim-escrow/src/lib.rs) |
 | **Token** | Native XLM Stellar Asset Contract (no trustlines needed) |
-| **Contract call tx (create_payment)** | [`9fe89306…9f132ae9`](https://stellar.expert/explorer/testnet/tx/9fe893067664fb61bc53bb04dd85cbcee9ec6b3b1df61990bd7068b29f132ae9) |
-| **Contract call tx (claim)** | [`17783c97…44713b12`](https://stellar.expert/explorer/testnet/tx/17783c97b24b5da3547dd99efe015d6b36830038d90692863e624eb444713b12) |
+| **Contract call tx — create_payment, invoked from the frontend via wallet** | [`e6b44a60…da77fbc2`](https://stellar.expert/explorer/testnet/tx/e6b44a60b91be0534293bc447274bdf135ee58148101f9c7d4d461d2da77fbc2) |
 
 How it works: `create_payment` locks XLM behind `sha256(secret)` with a 24h expiry · `claim` pays out to any destination that presents the secret · `refund` returns expired escrows to the sender. 8 unit tests cover the happy path, wrong secret, double claim, expiry, and duplicate-hash cases.
 
