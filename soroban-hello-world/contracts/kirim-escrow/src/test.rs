@@ -1,4 +1,7 @@
 #![cfg(test)]
+// Amount literals are grouped as `<whole>_<7-decimal fraction>` to mirror
+// Stellar's 7-decimal asset precision, not by thousands.
+#![allow(clippy::inconsistent_digit_grouping)]
 
 use super::*;
 use soroban_sdk::{

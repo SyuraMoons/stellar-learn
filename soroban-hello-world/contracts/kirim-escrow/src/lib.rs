@@ -82,11 +82,7 @@ impl KirimEscrow {
             return Err(Error::PaymentExists);
         }
 
-        token::Client::new(&env, &token).transfer(
-            &sender,
-            &env.current_contract_address(),
-            &amount,
-        );
+        token::Client::new(&env, &token).transfer(&sender, env.current_contract_address(), &amount);
 
         let payment = Payment {
             sender,
@@ -96,6 +92,7 @@ impl KirimEscrow {
             status: Status::Pending,
         };
         env.storage().persistent().set(&key, &payment);
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("created"), claim_hash),
             (payment.amount, payment.expiry),
@@ -130,6 +127,7 @@ impl KirimEscrow {
 
         payment.status = Status::Claimed;
         env.storage().persistent().set(&key, &payment);
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("claimed"), claim_hash),
             (destination, payment.amount),
@@ -163,6 +161,7 @@ impl KirimEscrow {
 
         payment.status = Status::Refunded;
         env.storage().persistent().set(&key, &payment);
+        #[allow(deprecated)]
         env.events().publish(
             (symbol_short!("refunded"), claim_hash),
             (payment.sender.clone(), payment.amount),
