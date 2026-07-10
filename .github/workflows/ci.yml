@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: Contracts (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: soroban-hello-world
+
+      - name: cargo fmt --check
+        working-directory: soroban-hello-world
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: soroban-hello-world
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: soroban-hello-world
+        run: cargo test --workspace
+
+  frontend:
+    name: Frontend (lint, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: stellar-frontend-challenge/package-lock.json
+
+      - name: npm ci
+        working-directory: stellar-frontend-challenge
+        run: npm ci
+
+      - name: Lint
+        working-directory: stellar-frontend-challenge
+        run: npm run lint
+
+      - name: Test
+        working-directory: stellar-frontend-challenge
+        run: npm test
+
+      - name: Build
+        working-directory: stellar-frontend-challenge
+        run: npm run build
+        env:
+          NEXT_PUBLIC_CONTRACT_ID: CAPLG3MZG6LSH2VMGZHIQV7T5DP7RBJNQH44OLAUPIK3FDQHK5K5PW2Y
+          NEXT_PUBLIC_ROUTER_CONTRACT_ID: CCSVW2FTWP7UMB6EVSUUCZ3Y5I3JWHZXBWFJM3JMOT2C7GXSIP37Y6A6
+          NEXT_PUBLIC_SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
