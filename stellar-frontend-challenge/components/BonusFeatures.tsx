@@ -217,7 +217,7 @@ export function AddressBook() {
       {addresses.length === 0 ? (
         <div className="text-center py-8 text-white/40">
           <p>No saved addresses yet</p>
-          <p className="text-sm mt-2">Click "Add Address" to get started</p>
+          <p className="text-sm mt-2">Click &quot;Add Address&quot; to get started</p>
         </div>
       ) : (
         <div className="space-y-2">

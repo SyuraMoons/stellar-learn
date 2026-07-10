@@ -157,7 +157,7 @@ export function stroopsToXlm(stroops: bigint | string): string {
   return `${whole}.${frac.toString().padStart(7, '0').replace(/0+$/, '')}`;
 }
 
-function mapError(error: any, phase: 'sign' | 'rpc'): ContractCallError {
+export function mapError(error: any, phase: 'sign' | 'rpc'): ContractCallError {
   if (error instanceof ContractCallError) return error;
 
   const message: string = error?.message || String(error);
