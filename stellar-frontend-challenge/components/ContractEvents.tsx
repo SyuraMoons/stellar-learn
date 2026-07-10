@@ -1,19 +1,28 @@
 /**
- * ContractEvents Component — real-time kirim-escrow contract activity.
+ * ContractEvents Component — real-time kirim-router + kirim-escrow activity.
  *
- * Polls Soroban RPC getEvents every few seconds and renders the contract's
- * created / claimed / refunded events as a live feed.
+ * Uses lib/useContractEvents (cursor-based incremental polling across both
+ * contracts, with exponential backoff and tab-visibility pause) to render a
+ * live feed of created / claimed / refunded / routed events.
  */
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
 import { stellar } from '@/lib/stellar-helper';
-import { fetchContractEvents, type ContractEvent } from '@/lib/contract-events';
-import { FaLock, FaLockOpen, FaUndo, FaExternalLinkAlt } from 'react-icons/fa';
+import { useContractEvents } from '@/lib/useContractEvents';
+import type { ContractEvent } from '@/lib/contract-events';
+import {
+  FaLock,
+  FaLockOpen,
+  FaUndo,
+  FaExchangeAlt,
+  FaExternalLinkAlt,
+} from 'react-icons/fa';
 import { Card, EmptyState } from './example-components';
 
-const POLL_MS = 6000;
+interface ContractEventsProps {
+  onNewEvents?: (events: ContractEvent[]) => void;
+}
 
 const EVENT_META: Record<
   string,
@@ -22,6 +31,7 @@ const EVENT_META: Record<
   created: { label: 'Locked in escrow', icon: <FaLock className="text-xs" /> },
   claimed: { label: 'Claimed', icon: <FaLockOpen className="text-xs" /> },
   refunded: { label: 'Refunded', icon: <FaUndo className="text-xs" /> },
+  routed: { label: 'Fee routed', icon: <FaExchangeAlt className="text-xs" /> },
 };
 
 function relativeTime(date: Date): string {
@@ -33,29 +43,8 @@ function relativeTime(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export default function ContractEvents() {
-  const [events, setEvents] = useState<ContractEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  const poll = useCallback(async () => {
-    try {
-      const list = await fetchContractEvents();
-      setEvents(list);
-      setError(false);
-    } catch (err) {
-      console.error('Error fetching contract events:', err);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    poll();
-    const timer = setInterval(poll, POLL_MS);
-    return () => clearInterval(timer);
-  }, [poll]);
+export default function ContractEvents({ onNewEvents }: ContractEventsProps) {
+  const { events, loading, offline } = useContractEvents(onNewEvents);
 
   return (
     <Card>
@@ -66,10 +55,10 @@ export default function ContractEvents() {
         <span className="flex items-center gap-1.5 rounded-full border border-neutral-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-neutral-500">
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              error ? 'bg-red-400' : 'animate-pulse bg-emerald-500'
+              offline ? 'bg-red-400' : 'animate-pulse bg-emerald-500'
             }`}
           />
-          {error ? 'Offline' : 'Live'}
+          {offline ? 'Offline' : 'Live'}
         </span>
       </div>
 
@@ -84,7 +73,7 @@ export default function ContractEvents() {
       ) : events.length === 0 ? (
         <EmptyState
           title="No contract events yet"
-          description="Escrow creations, claims, and refunds from the last hours appear here in real time."
+          description="Escrow creations, claims, refunds, and routed fees appear here in real time."
         />
       ) : (
         <div className="max-h-80 divide-y divide-neutral-100 overflow-y-auto">
@@ -104,6 +93,7 @@ export default function ContractEvents() {
                     {ev.amountXlm && (
                       <span className="ml-1.5 [font-variant-numeric:tabular-nums]">
                         · {ev.amountXlm} XLM
+                        {ev.feeXlm && ` (fee ${ev.feeXlm} XLM)`}
                       </span>
                     )}
                   </p>
@@ -132,7 +122,9 @@ export default function ContractEvents() {
       )}
 
       <p className="mt-4 text-center text-xs text-neutral-400">
-        Polling Soroban RPC every {POLL_MS / 1000}s
+        {offline
+          ? 'Reconnecting to Soroban RPC…'
+          : 'Live via Soroban RPC — polling both contracts'}
       </p>
     </Card>
   );

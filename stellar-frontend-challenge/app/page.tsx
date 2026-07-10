@@ -7,9 +7,11 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { CONTRACT_ID, CONTRACT_EXPLORER_URL } from '@/lib/config';
+import { ToastProvider, useToast } from '@/components/Toaster';
+import type { ContractEvent } from '@/lib/contract-events';
 
 // Stellar Wallets Kit touches `window` when lib/stellar-helper.ts loads, so
 // everything that imports it must render client-side only.
@@ -55,15 +57,43 @@ const GUIDE_STEPS = [
   },
 ];
 
+const EVENT_TOAST_MESSAGE: Record<string, (ev: ContractEvent) => string> = {
+  created: (ev) => `${ev.amountXlm ?? '—'} XLM locked in escrow`,
+  claimed: (ev) => `Claimed ${ev.amountXlm ?? '—'} XLM`,
+  refunded: (ev) => `Refunded ${ev.amountXlm ?? '—'} XLM`,
+  routed: (ev) =>
+    `Routed ${ev.amountXlm ?? '—'} XLM (fee ${ev.feeXlm ?? '—'} XLM)`,
+};
+
 export default function Home() {
+  return (
+    <ToastProvider>
+      <Dashboard />
+    </ToastProvider>
+  );
+}
+
+function Dashboard() {
   const [publicKey, setPublicKey] = useState<string>('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const { showToast } = useToast();
 
   const isConnected = Boolean(publicKey);
 
   const handleConnect = (key: string) => setPublicKey(key);
   const handleDisconnect = () => setPublicKey('');
   const handlePaymentSuccess = () => setRefreshKey((prev) => prev + 1);
+
+  const handleNewContractEvents = useCallback(
+    (events: ContractEvent[]) => {
+      events.forEach((ev) => {
+        const message = EVENT_TOAST_MESSAGE[ev.type]?.(ev) ?? `${ev.type} event`;
+        showToast(message, ev.type === 'claimed' ? 'success' : 'info');
+      });
+      setRefreshKey((prev) => prev + 1);
+    },
+    [showToast]
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-neutral-900">
@@ -149,7 +179,7 @@ export default function Home() {
                 publicKey={publicKey}
                 onSuccess={handlePaymentSuccess}
               />
-              <ContractEvents />
+              <ContractEvents onNewEvents={handleNewContractEvents} />
             </div>
           </div>
         )}
