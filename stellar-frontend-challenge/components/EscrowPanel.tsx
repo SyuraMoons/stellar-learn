@@ -12,15 +12,19 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { stellar } from '@/lib/stellar-helper';
 import {
   createEscrow,
   claimEscrow,
+  getRouterConfig,
   isValidClaimCode,
+  stroopsToXlm,
+  STROOPS_PER_XLM,
   ContractCallError,
   type TxStatus,
 } from '@/lib/contract';
+import { computeFee, formatFeeBps } from '@/lib/fees';
 import { CONTRACT_ID, CONTRACT_EXPLORER_URL } from '@/lib/config';
 import { FaCheck, FaLock, FaArrowRight } from 'react-icons/fa';
 import {
@@ -114,6 +118,24 @@ function StatusTimeline({ status }: { status: TxStatus }) {
 export default function EscrowPanel({ publicKey, onSuccess }: EscrowPanelProps) {
   const [tab, setTab] = useState<Tab>('send');
 
+  // router fee config (loaded once, used for the live fee breakdown)
+  const [feeBps, setFeeBps] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getRouterConfig()
+      .then((config) => {
+        if (!cancelled) setFeeBps(config.feeBps);
+      })
+      .catch(() => {
+        // non-fatal: fee breakdown just stays hidden, the send flow itself
+        // still surfaces router errors when it actually calls the contract
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // send flow
   const [amount, setAmount] = useState('');
   const [amountError, setAmountError] = useState('');
@@ -121,6 +143,7 @@ export default function EscrowPanel({ publicKey, onSuccess }: EscrowPanelProps) 
     secretHex: string;
     txHash: string;
     amount: string;
+    netAmountXlm: string;
   } | null>(null);
 
   // claim flow
@@ -155,10 +178,15 @@ export default function EscrowPanel({ publicKey, onSuccess }: EscrowPanelProps) 
     setStatus(null);
   };
 
+  const num = parseFloat(amount);
+  const feeBreakdown =
+    feeBps !== null && amount.trim() && !isNaN(num) && num > 0
+      ? computeFee(BigInt(Math.round(num * STROOPS_PER_XLM)), feeBps)
+      : null;
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const num = parseFloat(amount);
     if (!amount.trim() || isNaN(num) || num <= 0) {
       setAmountError('Enter a positive XLM amount');
       return;
@@ -171,7 +199,10 @@ export default function EscrowPanel({ publicKey, onSuccess }: EscrowPanelProps) 
         amountXlm: amount,
         onStatus: setStatus,
       });
-      setSendResult({ ...result, amount });
+      const netAmountXlm = feeBreakdown
+        ? stroopsToXlm(feeBreakdown.net)
+        : amount;
+      setSendResult({ ...result, amount, netAmountXlm });
       setAmount('');
       onSuccess?.();
     } catch (err) {
@@ -238,11 +269,12 @@ export default function EscrowPanel({ publicKey, onSuccess }: EscrowPanelProps) 
             <FaLock className="text-sm" />
           </div>
           <p className="mb-1 text-base font-semibold text-neutral-900">
-            {sendResult.amount} XLM locked in escrow
+            {sendResult.netAmountXlm} XLM locked in escrow
           </p>
           <p className="mb-5 text-sm text-neutral-500">
-            Share this one-time claim code with the recipient. It&apos;s shown
-            only once — anyone with the code can claim within 24 hours.
+            Sent {sendResult.amount} XLM (platform fee deducted). Share this
+            one-time claim code with the recipient. It&apos;s shown only
+            once — anyone with the code can claim within 24 hours.
           </p>
 
           <div className="mb-2 rounded-xl border border-neutral-900 p-4 text-left">
@@ -355,10 +387,32 @@ export default function EscrowPanel({ publicKey, onSuccess }: EscrowPanelProps) 
             onChange={setAmount}
             error={amountError}
           />
-          <p className="text-xs text-neutral-400">
-            The contract escrows your XLM and gives you a secret claim code.
-            Unclaimed payments can be refunded after 24 hours.
-          </p>
+
+          {feeBreakdown ? (
+            <div className="animate-fade-up space-y-1.5 rounded-xl border border-neutral-200 p-3 text-sm">
+              <div className="flex items-center justify-between text-neutral-500">
+                <span>Amount</span>
+                <span className="font-mono">{amount} XLM</span>
+              </div>
+              <div className="flex items-center justify-between text-neutral-500">
+                <span>Platform fee ({formatFeeBps(feeBps ?? 0)})</span>
+                <span className="font-mono">
+                  {stroopsToXlm(feeBreakdown.fee)} XLM
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-t border-neutral-100 pt-1.5 font-medium text-neutral-900">
+                <span>Recipient receives</span>
+                <span className="font-mono">
+                  {stroopsToXlm(feeBreakdown.net)} XLM
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-neutral-400">
+              The contract escrows your XLM and gives you a secret claim code.
+              Unclaimed payments can be refunded after 24 hours.
+            </p>
+          )}
           <Button type="submit" fullWidth>
             <span className="flex items-center justify-center gap-2">
               <FaLock className="text-xs" /> Lock in escrow

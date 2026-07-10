@@ -1,10 +1,16 @@
 /**
- * kirim-escrow contract client (Soroban, Stellar testnet).
+ * kirim-router + kirim-escrow contract client (Soroban, Stellar testnet).
  *
- * Calls the deployed hashlock-escrow contract from the browser:
- *   createEscrow  — lock XLM behind a secret claim code (create_payment)
- *   claimEscrow   — pay out to the connected wallet given the code (claim)
- *   getPayment    — read a payment's state (get_payment, simulation only)
+ * Calls the deployed contracts from the browser:
+ *   createEscrow    — router.send_remittance: take a platform fee, then
+ *                      cross-contract-call escrow.create_payment with the
+ *                      net amount and the user as sender (so refunds still
+ *                      return to the user, not the router)
+ *   claimEscrow     — escrow.claim: pay out to the connected wallet given
+ *                      the code
+ *   getPayment      — escrow.get_payment: read a payment's state (simulation)
+ *   getRouterConfig — router.get_config: read the current fee_bps/treasury
+ *                      (simulation, cached)
  *
  * Transactions are signed with the wallet the user selected at connect time:
  * Stellar Wallets Kit keeps the selected wallet in a module-level store shared
@@ -36,7 +42,7 @@ import {
   WalletNetwork,
   allowAllModules,
 } from '@creit.tech/stellar-wallets-kit';
-import { CONTRACT_ID, SOROBAN_RPC_URL } from './config';
+import { CONTRACT_ID, ROUTER_CONTRACT_ID, SOROBAN_RPC_URL } from './config';
 
 // ── types ────────────────────────────────────────────────────────────────
 
@@ -70,9 +76,13 @@ export interface EscrowPayment {
   status: 'Pending' | 'Claimed' | 'Refunded';
 }
 
-// ── contract error codes (must match Error enum in kirim-escrow lib.rs) ──
+// ── contract error codes ──────────────────────────────────────────────────
+// kirim-escrow uses 1–10, kirim-router uses 101+ (disjoint ranges, so a
+// single map unambiguously handles `Error(Contract, #N)` from either
+// contract regardless of which one the failing invocation touched).
 
 const CONTRACT_ERRORS: Record<number, string> = {
+  // kirim-escrow (lib.rs Error enum)
   1: 'The contract is already initialized.',
   2: 'The contract is not initialized yet.',
   3: 'A payment with this claim code already exists — try again to get a fresh code.',
@@ -83,6 +93,12 @@ const CONTRACT_ERRORS: Record<number, string> = {
   8: 'This payment has expired and can no longer be claimed.',
   9: 'The payment hasn’t expired yet — refunds only work after expiry.',
   10: 'Wrong claim code — no pending payment matches it.',
+  // kirim-router (lib.rs Error enum)
+  101: 'The router is already initialized.',
+  102: 'The router is not initialized yet.',
+  103: 'The amount is invalid.',
+  104: 'The platform fee is invalid.',
+  105: 'The amount is too small to cover the platform fee.',
 };
 
 // ── singletons ───────────────────────────────────────────────────────────
@@ -99,7 +115,7 @@ const kit = new StellarWalletsKit({
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
-const STROOPS_PER_XLM = 10_000_000;
+export const STROOPS_PER_XLM = 10_000_000;
 
 export function toHex(bytes: Uint8Array): string {
   return Array.from(bytes)
@@ -213,12 +229,13 @@ async function getTransactionStatus(
 // ── core invoke pipeline ─────────────────────────────────────────────────
 
 async function invoke(
+  contractId: string,
   source: string,
   method: string,
   args: any[],
   onStatus: OnStatus
 ): Promise<string> {
-  const contract = new Contract(CONTRACT_ID);
+  const contract = new Contract(contractId);
 
   onStatus('building');
   let account;
@@ -336,8 +353,9 @@ export async function createEscrow(params: {
   }
 
   const txHash = await invoke(
+    ROUTER_CONTRACT_ID,
     params.sender,
-    'create_payment',
+    'send_remittance',
     [
       new Address(params.sender).toScVal(),
       nativeToScVal(xlmToStroops(params.amountXlm), { type: 'i128' }),
@@ -373,6 +391,7 @@ export async function claimEscrow(params: {
   }
 
   const txHash = await invoke(
+    CONTRACT_ID,
     params.destination,
     'claim',
     [
@@ -432,4 +451,64 @@ export async function getPayment(
     expiry: Number(value.expiry),
     status: value.status?.[0] ?? String(value.status),
   };
+}
+
+export interface RouterConfig {
+  feeBps: number;
+  treasury: string;
+}
+
+let cachedRouterConfig: RouterConfig | null = null;
+let cachedRouterConfigPromise: Promise<RouterConfig> | null = null;
+
+/**
+ * Read the router's current fee_bps/treasury (simulation only, cached for
+ * the lifetime of the page — the fee rarely changes and every render of the
+ * send form would otherwise trigger a fresh RPC round trip).
+ */
+export async function getRouterConfig(): Promise<RouterConfig> {
+  if (cachedRouterConfig) return cachedRouterConfig;
+  if (cachedRouterConfigPromise) return cachedRouterConfigPromise;
+
+  cachedRouterConfigPromise = (async () => {
+    const contract = new Contract(ROUTER_CONTRACT_ID);
+
+    let sim;
+    try {
+      const tx = new TransactionBuilder(new Account(SIMULATION_SOURCE, '0'), {
+        fee: BASE_FEE,
+        networkPassphrase,
+      })
+        .addOperation(contract.call('get_config'))
+        .setTimeout(60)
+        .build();
+      sim = await server.simulateTransaction(tx);
+    } catch (error) {
+      throw mapError(error, 'rpc');
+    }
+
+    if (SorobanRpc.Api.isSimulationError(sim)) {
+      throw mapError(new Error(sim.error), 'rpc');
+    }
+    if (!SorobanRpc.Api.isSimulationSuccess(sim) || !sim.result?.retval) {
+      throw new ContractCallError(
+        'network',
+        'Could not load the router’s fee configuration.'
+      );
+    }
+
+    const value = scValToNative(sim.result.retval);
+    const config: RouterConfig = {
+      feeBps: Number(value.fee_bps),
+      treasury: value.treasury,
+    };
+    cachedRouterConfig = config;
+    return config;
+  })();
+
+  try {
+    return await cachedRouterConfigPromise;
+  } finally {
+    cachedRouterConfigPromise = null;
+  }
 }
