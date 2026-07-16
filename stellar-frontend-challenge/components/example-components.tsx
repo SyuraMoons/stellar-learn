@@ -21,6 +21,19 @@ export function LoadingSpinner({ className = '' }: { className?: string }) {
   );
 }
 
+// Skeleton — shared loading placeholder shape used across the dashboard
+// cards (balance, history, escrow, events) so loading states feel like one
+// consistent system instead of each component inventing its own pulse block.
+export function Skeleton({ className = '' }: { className?: string }) {
+  return (
+    <div
+      className={`animate-pulse rounded bg-neutral-100 ${className}`}
+      role="status"
+      aria-label="Loading"
+    />
+  );
+}
+
 // Copy to Clipboard Button
 export function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);

@@ -104,7 +104,7 @@ function Dashboard() {
             <span className="text-xl font-bold tracking-tight">
               kirim<span className="text-neutral-300">.</span>
             </span>
-            <span className="flex items-center gap-1.5 rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white">
+            <span className="hidden items-center gap-1.5 rounded-full bg-neutral-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-white sm:flex">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
               Testnet
             </span>

@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { stellar } from '@/lib/stellar-helper';
 import { fundWithFriendbot } from '@/lib/friendbot';
 import { FaSync } from 'react-icons/fa';
-import { Card, LoadingSpinner } from './example-components';
+import { Card, LoadingSpinner, Skeleton } from './example-components';
 
 interface BalanceDisplayProps {
   publicKey: string;
@@ -90,10 +90,8 @@ export default function BalanceDisplay({ publicKey }: BalanceDisplayProps) {
   if (status === 'loading') {
     return (
       <Card>
-        <div className="animate-pulse">
-          <div className="mb-3 h-4 w-32 rounded bg-neutral-100" />
-          <div className="h-14 w-64 rounded-xl bg-neutral-100" />
-        </div>
+        <Skeleton className="mb-3 h-4 w-32" />
+        <Skeleton className="h-14 max-w-full rounded-xl sm:w-64" />
       </Card>
     );
   }

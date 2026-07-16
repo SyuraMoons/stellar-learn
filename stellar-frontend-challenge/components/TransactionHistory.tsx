@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { stellar } from '@/lib/stellar-helper';
 import { FaSync, FaArrowUp, FaArrowDown } from 'react-icons/fa';
-import { Card, EmptyState } from './example-components';
+import { Card, EmptyState, Skeleton } from './example-components';
 
 interface Transaction {
   id: string;
@@ -93,9 +93,7 @@ export default function TransactionHistory({
       <Card title="Activity">
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="h-16 rounded-xl bg-neutral-100" />
-            </div>
+            <Skeleton key={i} className="h-16 rounded-xl" />
           ))}
         </div>
       </Card>

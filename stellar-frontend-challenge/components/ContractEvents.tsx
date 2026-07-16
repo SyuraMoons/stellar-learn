@@ -18,7 +18,7 @@ import {
   FaExchangeAlt,
   FaExternalLinkAlt,
 } from 'react-icons/fa';
-import { Card, EmptyState } from './example-components';
+import { Card, EmptyState, Skeleton } from './example-components';
 
 interface ContractEventsProps {
   onNewEvents?: (events: ContractEvent[]) => void;
@@ -65,9 +65,7 @@ export default function ContractEvents({ onNewEvents }: ContractEventsProps) {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="h-12 rounded-xl bg-neutral-100" />
-            </div>
+            <Skeleton key={i} className="h-12 rounded-xl" />
           ))}
         </div>
       ) : events.length === 0 ? (
